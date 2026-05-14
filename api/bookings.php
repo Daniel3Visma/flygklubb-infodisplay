@@ -149,8 +149,12 @@ foreach ($allBookings as $booking) {
         continue;
     }
     
-    // Always show booking owner (teacher) name
-    $pilot = $booking['users']['booking_owner']['name'] ?? '';
+    // Prioritera elevens namn om det finns, annars visa läraren/bokaren
+    if (!empty($booking['users']['student']['name'])) {
+        $pilot = $booking['users']['student']['name'];
+    } else {
+        $pilot = $booking['users']['booking_owner']['name'] ?? '';
+    }
     $startTime = $booking['times']['start_local'] ?? '';
     $endTime = $booking['times']['end_local'] ?? '';
     
