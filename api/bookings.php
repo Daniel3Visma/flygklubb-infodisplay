@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Europe/Stockholm');
 /**
  * PHP proxy for MyWebLog bookings using Main API v4
  * Fetches booking data and returns structured JSON
