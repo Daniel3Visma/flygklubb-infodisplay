@@ -1,6 +1,7 @@
 <?php
 /**
- * PHP proxy for CheckWX METAR data
+ * PHP proxy for AWC (Aviation Weather Center) METAR data
+ * No API key required. Free, official and highly reliable.
  * Polled independently from TAF — see METAR_REFRESH_MINUTES in config.php
  */
 
@@ -12,13 +13,7 @@ if (file_exists($configFile)) {
     require_once $configFile;
 }
 
-$apiKey = defined('CHECKWX_API_KEY') ? CHECKWX_API_KEY : getenv('CHECKWX_API_KEY');
-if (empty($apiKey)) {
-    http_response_code(500);
-    echo json_encode(['error' => 'API key not configured. Create config.php with CHECKWX_API_KEY constant.']);
-    exit;
-}
-
+// AWC API behöver ingen nyckel, så vi plockar bara ut ICAO och uppdateringsfrekvens
 $icao = defined('ICAO_CODE') ? ICAO_CODE : 'ESMK';
 $refreshMin = defined('METAR_REFRESH_MINUTES') ? max(1, (int) METAR_REFRESH_MINUTES) : 15;
 
@@ -26,10 +21,13 @@ $refreshMin = defined('METAR_REFRESH_MINUTES') ? max(1, (int) METAR_REFRESH_MINU
 $maxAge = (int) max(30, ($refreshMin * 60) / 2);
 header("Cache-Control: max-age={$maxAge}");
 
-$url = "https://api.checkwx.com/v2/metar/{$icao}/decoded";
+// AWC:s officiella JSON API
+$url = "https://aviationweather.gov/api/data/metar?ids={$icao}&format=json";
+
+// Det är bra praxis att skicka med en User-Agent när man använder publika, gratis API:er
 $context = stream_context_create([
     'http' => [
-        'header' => "X-API-Key: {$apiKey}\r\n",
+        'header' => "User-Agent: MinMetarApp/1.0 (Skriv in din mail här om du vill)\r\n",
         'timeout' => 10,
     ],
 ]);
@@ -43,12 +41,14 @@ $result = [
     'fetchedAt' => date('c'),
 ];
 
-if ($data && isset($data['data']) && count($data['data']) > 0) {
-    $result['metar'] = $data['data'][0];
-    $result['metarRaw'] = $data['data'][0]['raw_text'] ?? null;
+// AWC returnerar en array med METAR-objekt. Vi tar det första (och enda, om vi bara frågat efter ett).
+if (is_array($data) && count($data) > 0) {
+    $result['metar'] = $data[0];
+    // AWC kallar fältet för rå-strängen "rawOb"
+    $result['metarRaw'] = $data[0]['rawOb'] ?? null; 
 } else {
     http_response_code(502);
-    echo json_encode(['error' => 'Failed to fetch METAR from CheckWX']);
+    echo json_encode(['error' => 'Failed to fetch METAR from Aviation Weather Center']);
     exit;
 }
 
