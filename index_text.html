@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>InfoDisplay</title>
+    <meta name="description" content="Bokningsskärm för flygklubb" />
+    <meta name="author" content="Lovable" />
+
+    <meta property="og:title" content="InfoDisplay flygklubb" />
+    <meta property="og:description" content="Informationsskärm med avkodad METAR" />
+    <meta property="og:type" content="website" />
+
+    <script type="module" crossorigin src="/assets/index-lITr9fiO.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BEs1k3u4.css">
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <!--
+      Bränslemätare för Växjö Flygklubbs hemsida.
+      Flyttas in under bokningslistan av skriptet vfk-attach-layout nedan.
+      Ligger kvar längst ner till vänster (fixed) som reserv om appens
+      layout skulle ändras och bokningslistan inte hittas.
+    -->
+    <div id="vfk-fuel-overlay" style="position:fixed; left:16px; bottom:16px; z-index:9999;">
+      <div id="vfk-fuel" class="vfk-fuel">
+        <div class="vfk-fuel__top">
+          <span class="vfk-fuel__type">Mogas</span>
+          <button type="button" id="vfk-fuel-info" class="vfk-fuel__infobtn"
+                  aria-label="Visa senaste påfyllning">i</button>
+          <div id="vfk-fuel-tip" class="vfk-fuel__tip" role="tooltip"></div>
+        </div>
+
+        <div class="vfk-fuel__tank">
+          <svg viewBox="126 38 448 358" role="img" aria-labelledby="vfk-fuel-title">
+            <title id="vfk-fuel-title">Bränslenivå i klubbens cistern</title>
+
+            <defs>
+              <!-- Plåt på skåp, invallning och detaljer -->
+              <linearGradient id="vfk-steel" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#8d9ba7"/>
+                <stop offset="55%"  stop-color="#74838f"/>
+                <stop offset="100%" stop-color="#5d6b77"/>
+              </linearGradient>
+
+              <!-- Cisternens hölje - ljusare så bränslenivån syns tydligt -->
+              <linearGradient id="vfk-shell" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#f2f5f8"/>
+                <stop offset="30%"  stop-color="#dde4ea"/>
+                <stop offset="72%"  stop-color="#bcc7d1"/>
+                <stop offset="100%" stop-color="#9daab6"/>
+              </linearGradient>
+
+              <!-- Bränslet: färgas om av JS via CSS-variabler -->
+              <linearGradient id="vfk-fuel-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="var(--fuel-light, #51cf66)"/>
+                <stop offset="100%" stop-color="var(--fuel-dark, #2f9e44)"/>
+              </linearGradient>
+
+              <!-- Cisternens insida, används för att klippa bränslet -->
+              <clipPath id="vfk-tank-clip">
+                <path d="M 258,170 L 498,170 A 28,65 0 0 1 498,300 L 258,300 A 28,65 0 0 1 258,170 Z"/>
+              </clipPath>
+            </defs>
+
+            <!-- Avluftningsrör med huv -->
+            <rect x="232" y="70" width="14" height="120" fill="url(#vfk-steel)"/>
+            <rect x="216" y="58" width="46" height="14" rx="7" fill="#6b7985"/>
+            <rect x="228" y="48" width="22" height="12" rx="5" fill="#5d6b77"/>
+
+            <!-- Inspektionslucka på cisternens ovansida -->
+            <path d="M 330,170 L 420,170 L 404,148 L 346,148 Z" fill="#7f8d99"/>
+            <ellipse cx="375" cy="148" rx="46" ry="10" fill="#8d9ba7" stroke="#4d5a65" stroke-width="2"/>
+            <g fill="#5d6b77">
+              <circle cx="337" cy="149" r="2.4"/><circle cx="352" cy="144" r="2.4"/>
+              <circle cx="367" cy="141" r="2.4"/><circle cx="383" cy="141" r="2.4"/>
+              <circle cx="398" cy="144" r="2.4"/><circle cx="413" cy="149" r="2.4"/>
+              <circle cx="398" cy="154" r="2.4"/><circle cx="383" cy="157" r="2.4"/>
+              <circle cx="367" cy="157" r="2.4"/><circle cx="352" cy="154" r="2.4"/>
+            </g>
+
+            <!-- Handpump med svängd pip och spak -->
+            <rect x="466" y="126" width="12" height="50" fill="url(#vfk-steel)"/>
+            <path d="M 472,132 q 0,-16 18,-16 l 0,16" fill="none" stroke="#6b7985" stroke-width="9"
+                  stroke-linecap="round"/>
+            <rect x="458" y="150" width="28" height="12" rx="4" fill="#5d6b77"/>
+            <rect x="486" y="120" width="42" height="8" rx="4" fill="#c9a227"
+                  transform="rotate(-24 486 124)"/>
+
+            <!-- Cisternens hölje -->
+            <path d="M 258,170 L 498,170 A 28,65 0 0 1 498,300 L 258,300 A 28,65 0 0 1 258,170 Z"
+                  fill="url(#vfk-shell)"/>
+
+            <!-- Bränslet: en full "pelare" som JS skjuter nedåt. Clip-pathen döljer
+                 det som hamnar utanför cisternen, så nivån syns som vätskeyta.
+                 Klippningen måste ligga på den yttre gruppen - läggs den på samma
+                 element som transformeras följer den med och vätskan läcker ut. -->
+            <g clip-path="url(#vfk-tank-clip)">
+              <rect class="vfk-fuel-liquid" id="vfk-fuel-body" x="220" y="170" width="320" height="130"
+                    fill="url(#vfk-fuel-grad)" style="transform: translateY(130px)"/>
+              <rect class="vfk-fuel-liquid" id="vfk-fuel-surface" x="220" y="170" width="320" height="4"
+                    fill="var(--fuel-light, #51cf66)" opacity="0.9"
+                    style="transform: translateY(130px)"/>
+            </g>
+
+            <!-- Gavelsöm som ger cylinderkänslan -->
+            <path d="M 498,170 A 28,65 0 0 0 498,300" fill="none" stroke="#8b96a1" stroke-width="2.5"/>
+            <!-- Svetsskarv på mitten, som på riktiga tanken -->
+            <line x1="378" y1="170" x2="378" y2="300" stroke="#a9b4bf" stroke-width="2" opacity="0.7"/>
+
+            <!-- Cisternens ytterkontur -->
+            <path d="M 258,170 L 498,170 A 28,65 0 0 1 498,300 L 258,300 A 28,65 0 0 1 258,170 Z"
+                  fill="none" stroke="#4d5a65" stroke-width="3"/>
+
+            <!-- Spännband över cisternen -->
+            <rect x="296" y="168" width="17" height="136" fill="#7f8d99" stroke="#4d5a65" stroke-width="1.5"/>
+            <rect x="437" y="168" width="17" height="136" fill="#7f8d99" stroke="#4d5a65" stroke-width="1.5"/>
+
+            <!-- Pumpskåp till vänster -->
+            <path d="M 150,116 L 258,104 L 258,302 L 150,302 Z" fill="url(#vfk-steel)"
+                  stroke="#4d5a65" stroke-width="2.5"/>
+            <path d="M 144,120 L 264,106 L 264,116 L 144,130 Z" fill="#6b7985"
+                  stroke="#4d5a65" stroke-width="2"/>
+            <rect x="166" y="150" width="46" height="34" rx="3" fill="#9aa7b2" opacity="0.85"/>
+            <circle cx="245" cy="215" r="4" fill="#4d5a65"/>
+
+            <!-- Invallningstråg som cisternen står i -->
+            <rect x="140" y="302" width="420" height="70" fill="url(#vfk-steel)"
+                  stroke="#4d5a65" stroke-width="2.5"/>
+            <rect x="134" y="296" width="432" height="14" rx="3" fill="#8d9ba7"
+                  stroke="#4d5a65" stroke-width="2"/>
+
+            <!-- Avläsningen skrivs på invallningens framsida -->
+            <text id="vfk-fuel-label" x="350" y="346" text-anchor="middle"
+                  font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif"
+                  font-size="25" font-weight="600" fill="#ffffff">–</text>
+
+            <!-- Fötter -->
+            <rect x="186" y="372" width="46" height="14" fill="#5d6b77"/>
+            <rect x="468" y="372" width="46" height="14" fill="#5d6b77"/>
+          </svg>
+        </div>
+
+        <div id="vfk-fuel-updated" class="vfk-fuel__updated"></div>
+      </div>
+    </div>
+
+    <style>
+      .vfk-fuel {
+        /* Ändra max-width om du vill ha mätaren större eller mindre */
+        max-width: 340px;
+        margin: 0 auto;
+        padding: 0.6rem 0.85rem 0.5rem;
+        border: 1px solid rgba(34, 47, 68, 0.7);
+        border-radius: 8px;
+        background: rgb(11, 17, 30);
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        color: rgb(241, 245, 249);
+        position: relative;
+        box-sizing: border-box;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+      }
+      .vfk-fuel * { box-sizing: border-box; }
+
+      /* Ligger ovanpå illustrationen så den inte trycker ner tanken */
+      .vfk-fuel__top {
+        position: absolute;
+        top: 0.6rem;
+        right: 0.85rem;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .vfk-fuel__type {
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: rgb(13, 162, 231);
+      }
+
+      .vfk-fuel__infobtn {
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+        color: rgb(241, 245, 249);
+        font: 700 0.78rem/1 inherit;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .vfk-fuel__infobtn:hover { border-color: rgb(13, 162, 231); color: rgb(13, 162, 231); }
+
+      .vfk-fuel__tip {
+        position: absolute;
+        top: 1.9rem;
+        right: 0;
+        z-index: 5;
+        min-width: 200px;
+        padding: 0.6rem 0.75rem;
+        border-radius: 8px;
+        background: rgb(8, 12, 22);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        color: rgb(241, 245, 249);
+        font-size: 0.82rem;
+        line-height: 1.5;
+        text-align: left;
+        white-space: pre-line;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.15s ease;
+      }
+      .vfk-fuel__infobtn:hover + .vfk-fuel__tip,
+      .vfk-fuel__infobtn:focus + .vfk-fuel__tip,
+      .vfk-fuel__tip.is-open {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .vfk-fuel__tank svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      /* Mjuk rörelse när nivån uppdateras. Klassen sätts först efter första
+         renderingen så att starttillståndet ritas statiskt. */
+      .vfk-fuel--animate .vfk-fuel-liquid {
+        transition: transform 0.9s ease, fill 0.6s ease;
+      }
+
+      .vfk-fuel__updated {
+        margin-top: 0.15rem;
+        text-align: right;
+        font-size: 0.78rem;
+        color: rgba(241, 245, 249, 0.55);
+      }
+    </style>
+
+    <script>
+    (function () {
+      var API = "https://fuel.vaxjoflygklubb.se/api/v1/public/fuel-level";
+
+      // Cisternens insida i SVG-koordinater
+      var TOP = 170, BOTTOM = 300;
+      var HEIGHT = BOTTOM - TOP;
+
+      var root = document.getElementById("vfk-fuel");
+      var body = document.getElementById("vfk-fuel-body");
+      var surface = document.getElementById("vfk-fuel-surface");
+      var firstRender = true;
+      var labelEl = document.getElementById("vfk-fuel-label");
+      var tipEl = document.getElementById("vfk-fuel-tip");
+      var infoBtn = document.getElementById("vfk-fuel-info");
+      var updatedEl = document.getElementById("vfk-fuel-updated");
+
+      // En liggande cylinder fylls inte linjärt med höjden - halva höjden är mer
+      // än halva volymen i mitten. Räknar därför fram rätt yta för given volym.
+      function areaFractionForHeight(h) {
+        var r = 0.5;
+        var d = r - h;
+        var clamped = Math.max(-1, Math.min(1, d / r));
+        var area = r * r * Math.acos(clamped) - d * Math.sqrt(Math.max(0, r * r - d * d));
+        return area / (Math.PI * r * r);
+      }
+
+      function heightFractionForVolume(f) {
+        if (f <= 0) return 0;
+        if (f >= 1) return 1;
+        var lo = 0, hi = 1;
+        for (var i = 0; i < 40; i++) {
+          var mid = (lo + hi) / 2;
+          if (areaFractionForHeight(mid) < f) { lo = mid; } else { hi = mid; }
+        }
+        return (lo + hi) / 2;
+      }
+
+      function palette(liters) {
+        if (liters < 300) { return { light: "#ff6b6b", dark: "#c92a2a" }; }  // kritiskt
+        if (liters < 600) { return { light: "#ffd43b", dark: "#e8a300" }; }  // lågt
+        return { light: "#51cf66", dark: "#2f9e44" };
+      }
+
+      function nf(n) {
+        return n.toLocaleString("sv-SE");
+      }
+
+      function pad(n) {
+        return (n < 10 ? "0" : "") + n;
+      }
+
+      function nowStamp() {
+        var d = new Date();
+        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+          " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+      }
+
+      function render(liters, capacity, delivery) {
+        var fraction = capacity > 0 ? Math.max(0, Math.min(1, liters / capacity)) : 0;
+        var hFrac = heightFractionForVolume(fraction);
+        var fillHeight = hFrac * HEIGHT;
+
+        // Skjut vätskepelaren nedåt: 0 = full, HEIGHT = tom
+        var offset = "translateY(" + (HEIGHT - fillHeight) + "px)";
+        body.style.transform = offset;
+        surface.style.transform = offset;
+
+        // Göm ytlinjen när tanken är tom eller helt full
+        surface.setAttribute("opacity", (fillHeight < 3 || fraction >= 0.995) ? 0 : 0.9);
+
+        var colors = palette(liters);
+        root.style.setProperty("--fuel-light", colors.light);
+        root.style.setProperty("--fuel-dark", colors.dark);
+
+        labelEl.textContent = "Bränsle: " + nf(liters) + " L";
+        updatedEl.textContent = "Uppdaterad: " + nowStamp();
+
+        if (delivery && delivery.date) {
+          var lines = [
+            "Senaste påfyllning",
+            delivery.date,
+            nf(delivery.amount_liters) + " L bränsle"
+          ];
+          if (delivery.ethanol_percent !== null && delivery.ethanol_percent !== undefined) {
+            lines.push(nf(delivery.ethanol_percent) + " % etanol");
+          }
+          tipEl.textContent = lines.join("\n");
+        } else {
+          tipEl.textContent = "Ingen påfyllning registrerad";
+        }
+
+        // Första nivån ritas statiskt; först därefter slås animationen på. Att
+        // animera in från tomt läge direkt vid sidladdning kan annars göra att
+        // webbläsaren inte hinner rita om det klippta området.
+        if (firstRender) {
+          firstRender = false;
+          void root.offsetWidth;
+          root.classList.add("vfk-fuel--animate");
+        }
+      }
+
+      function showError() {
+        labelEl.textContent = "Kunde inte hämta nivån";
+        tipEl.textContent = "Ingen kontakt med bränsleloggen just nu";
+        updatedEl.textContent = "";
+      }
+
+      // Tooltipen öppnas med hover på datorn; på pekskärm finns ingen hover,
+      // så ett tryck växlar den i stället.
+      infoBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        tipEl.classList.toggle("is-open");
+      });
+      document.addEventListener("click", function () {
+        tipEl.classList.remove("is-open");
+      });
+
+      function load() {
+        fetch(API, { cache: "no-store" })
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          })
+          .then(function (data) {
+            render(data.liters_remaining, data.capacity_liters || 2000, data.last_delivery);
+          })
+          .catch(showError);
+      }
+
+      load();
+      setInterval(load, 5 * 60 * 1000);
+    })();
+    </script>
+
+    <!--
+      Klipper "Dagens bokningar" till max 7 synliga rader och flyttar in
+      bränslemätaren centrerad direkt under listan. Appen är byggd med
+      Lovable/React och laddas som en separat modul, så DOM:en finns inte
+      när det här skriptet körs - därför pollas det tills bokningslistan
+      hittas. Hittas den aldrig (t.ex. om appens layout ändras) ligger
+      mätaren kvar i sitt fasta bottom-left-läge som reserv.
+    -->
+    <script>
+    (function () {
+      var MAX_ROWS = 7;
+      var DEFAULT_WIDGET_WIDTH = 340;
+      var MIN_WIDGET_WIDTH = 190;
+      var MARGIN_TOP = 16;
+
+      function fallbackToCorner(overlay) {
+        overlay.style.position = "fixed";
+        overlay.style.left = "16px";
+        overlay.style.bottom = "16px";
+        overlay.style.zIndex = "9999";
+        overlay.style.display = "";
+        overlay.style.justifyContent = "";
+        overlay.style.marginTop = "";
+        var card = overlay.querySelector(".vfk-fuel");
+        if (card) card.style.maxWidth = "";
+        document.body.appendChild(overlay);
+      }
+
+      function attach() {
+        var header = Array.prototype.find.call(
+          document.querySelectorAll("span, div"),
+          function (e) { return e.children.length === 0 && e.textContent.trim() === "Dagens bokningar"; }
+        );
+        if (!header) return false;
+
+        var col = header.closest(".flex-col");
+        if (!col) return false;
+
+        var titleBar = col.children[0];
+        var tableWrapper = col.querySelector(':scope > div[class*="overflow-auto"]');
+        var table = tableWrapper && tableWrapper.querySelector("table");
+        var rows = table ? table.querySelectorAll("tbody tr") : [];
+        if (!rows.length) return false;
+
+        // Klipp listan till max 7 rader. flex-1 (grow/shrink) tas bort så att
+        // höjden alltid blir "innehåll upp till taket", inte klämd av flexboxen.
+        // offsetHeight används genomgående (inte getBoundingClientRect) eftersom
+        // appen skalas med en CSS transform: scale() för att passa skärmen -
+        // getBoundingClientRect ger då nedskalade pixlar som inte stämmer med
+        // vanliga CSS-pixelvärden som vi sätter via style.
+        var thead = table.querySelector("thead");
+        var rowHeight = rows[0].offsetHeight || 49;
+        var headHeight = thead ? thead.offsetHeight : 40;
+        var tableMaxHeight = Math.ceil(headHeight + MAX_ROWS * rowHeight) + 4;
+
+        tableWrapper.style.flex = "0 0 auto";
+        tableWrapper.style.maxHeight = tableMaxHeight + "px";
+        tableWrapper.style.overflow = "hidden";
+
+        var overlay = document.getElementById("vfk-fuel-overlay");
+        var card = overlay.querySelector(".vfk-fuel");
+
+        overlay.style.position = "static";
+        overlay.style.left = "";
+        overlay.style.bottom = "";
+        overlay.style.zIndex = "";
+        overlay.style.display = "flex";
+        overlay.style.justifyContent = "center";
+        overlay.style.marginTop = MARGIN_TOP + "px";
+        col.appendChild(overlay);
+
+        // Kolumnens höjd är fast (h-full), så den ändras inte av att vi
+        // stoppar in mätaren. Räkna ut hur mycket utrymme som blir kvar
+        // under listan och krymp mätaren (bredd, höjden följer med via
+        // SVG:ns proportioner) om den annars inte får plats.
+        var colHeight = col.offsetHeight;
+        var usedHeight = titleBar.offsetHeight + tableWrapper.offsetHeight + MARGIN_TOP;
+        var available = colHeight - usedHeight - 8;
+
+        if (available <= 60) {
+          fallbackToCorner(overlay);
+          return true;
+        }
+
+        card.style.maxWidth = DEFAULT_WIDGET_WIDTH + "px";
+        var h1 = card.offsetHeight;
+        if (h1 > available) {
+          card.style.maxWidth = MIN_WIDGET_WIDTH + "px";
+          var h2 = card.offsetHeight;
+          if (h2 > available) {
+            // Får inte plats ens vid minsta godtagbara storlek - en så hoprullad
+            // mätare blir svårläst och ser trasig ut, så hörnet är bättre reserv.
+            fallbackToCorner(overlay);
+            return true;
+          } else {
+            var a = (h1 - h2) / (DEFAULT_WIDGET_WIDTH - MIN_WIDGET_WIDTH);
+            var b = h1 - a * DEFAULT_WIDGET_WIDTH;
+            var targetW = (available - b) / a;
+            targetW = Math.max(MIN_WIDGET_WIDTH, Math.min(DEFAULT_WIDGET_WIDTH, Math.floor(targetW)));
+            card.style.maxWidth = targetW + "px";
+          }
+        }
+        return true;
+      }
+
+      var tries = 0;
+      var timer = setInterval(function () {
+        tries++;
+        if (attach() || tries > 40) { clearInterval(timer); }
+      }, 250);
+    })();
+    </script>
+  </body>
+</html>
+
+
