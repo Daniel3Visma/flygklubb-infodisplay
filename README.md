@@ -8,7 +8,7 @@ Ett projekt byggt med Lovable. Detta är den kompilerade versionen som inte krä
 - Korrigerat soltiderna så att de följer sommar/vintertid
 - Möjlighet att visa variabel vindinfallsvinkel mot banan. Aktiveras med WIND_VARIATION_ENABLED i config.
 - Om NOTAM-panelen används och det är fler NOTAM än vad som ryms i textrutan delas de upp i flera fönster som alternerat
-I övrigt buggfixar och lite kodstädning.
+- I övrigt buggfixar och lite kodstädning.
   
 ## Version 2.1 nyheter ##
 - Möjlighet att ange antal uppdateringar av METAR/TAF. Då CheckWX inför begränsat antal anrop per dygn till max 200 kan man nu ange hur ofta data hämtas. Standardvärdena är TAF var 60 minut och METAR var 15 minut
