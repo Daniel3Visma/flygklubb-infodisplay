@@ -7,8 +7,7 @@ Ett projekt byggt med Lovable. Detta är den kompilerade versionen som inte krä
 - Uppdatering för myWebLog API version 5. Se myWebLogs dokumentation. Avkommentera V4 om du använder denna
 - Korrigerat soltiderna så att de följer sommar/vintertid
 - Möjlighet att visa variabel vindinfallsvinkel mot banan. Aktiveras med WIND_VARIATION_ENABLED i config.
-- Om NOTAM-panelen används och det är fler NOTAM än vad som ryms i textrutan delas de upp i flera fönster som alternerat.
-
+- Om NOTAM-panelen används och det är fler NOTAM än vad som ryms i textrutan delas de upp i flera fönster som alternerat
 I övrigt buggfixar och lite kodstädning.
   
 ## Version 2.1 nyheter ##
