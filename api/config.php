@@ -12,7 +12,13 @@
 define('CHECKWX_API_KEY', 'din-apinyckel-här');
 
 // MyWebLog API v4 credentials (get Bearer token from ADMIN > Integration/API)
-define('MYWEBLOG_BEARER_TOKEN', 'din-apinyckel-här');
+// define('MYWEBLOG_BEARER_TOKEN', 'din-apinyckel-här');
+
+// MyWebLog API v5 credentials (ADMIN > Integrationer/API)
+define('MYWEBLOG_BEARER_TOKEN', 'din-apinyckelV5-här');
+// Client ID (visas bredvid token). Ange för OAuth 2.0 (rekommenderat; krävs från 2028-01-01).
+// Lämna tom för att skicka token direkt (fungerar t.o.m. 2027-12-31).
+define('MYWEBLOG_CLIENT_ID', 'ditt-client-idV5-här');
 
 // Autorouter API credentials for NOTAM data
 // Register at https://www.autorouter.aero and create an API client to get these
@@ -42,6 +48,7 @@ define('NOTAM_ENABLED', true);                     // true/false – show NOTAM 
 
 // Weather panel (METAR/TAF via CheckWX)
 define('WEATHER_ENABLED', true);                   // true/false – show weather panel
+define('WIND_VARIATION_ENABLED', false);           // true/false – visa färgat fält för vindvariation (t.ex. 220V290)
 
 // CheckWX poll-intervaller per resurs (en instans = ett anrop per intervall)
 // Gratisplanen tillåter 200 anrop/dygn. Räkna: 1440/METAR + 1440/TAF.
