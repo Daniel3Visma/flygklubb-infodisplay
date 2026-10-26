@@ -51,6 +51,7 @@ echo json_encode([
     ],
     'weather' => [
         'enabled' => defined('WEATHER_ENABLED') ? (bool) WEATHER_ENABLED : true,
+        'windVariation' => defined('WIND_VARIATION_ENABLED') ? (bool) WIND_VARIATION_ENABLED : false,
         'metarRefreshMinutes' => defined('METAR_REFRESH_MINUTES') ? max(1, (int) METAR_REFRESH_MINUTES) : 15,
         'tafRefreshMinutes' => defined('TAF_REFRESH_MINUTES') ? max(1, (int) TAF_REFRESH_MINUTES) : 60,
     ],
