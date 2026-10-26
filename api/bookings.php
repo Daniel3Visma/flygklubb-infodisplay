@@ -1,7 +1,7 @@
 <?php
 date_default_timezone_set('Europe/Stockholm');
 /**
- * PHP proxy for MyWebLog bookings using Main API v4
+ * PHP proxy for MyWebLog bookings using Main API v5
  * Fetches booking data and returns structured JSON
  */
 
@@ -15,8 +15,9 @@ if (file_exists($configFile)) {
     require_once $configFile;
 }
 
-// Get Bearer token from config or environment
+// Token from myWebLog (Integrations, API). Optional Client ID enables OAuth 2.0 (recommended in v5).
 $bearerToken = defined('MYWEBLOG_BEARER_TOKEN') ? MYWEBLOG_BEARER_TOKEN : getenv('MYWEBLOG_BEARER_TOKEN');
+$clientId = defined('MYWEBLOG_CLIENT_ID') ? MYWEBLOG_CLIENT_ID : getenv('MYWEBLOG_CLIENT_ID');
 
 if (empty($bearerToken)) {
     http_response_code(500);
@@ -24,58 +25,86 @@ if (empty($bearerToken)) {
     exit;
 }
 
-/**
- * Make API call to MyWebLog Main API v4
- * Uses Bearer token authentication and RESTful endpoints
- */
-function callMyWebLogAPIv4($endpoint, $bearerToken, $queryParams = []) {
-    $url = 'https://api.myweblog.se/main/v4/' . $endpoint . '/';
-    
-    if (!empty($queryParams)) {
-        $url .= '?' . http_build_query($queryParams);
+define('MWL_BASE', 'https://api.myweblog.se/main/v5');
+define('MWL_TOKEN_CACHE', sys_get_temp_dir() . '/myweblog_v5_token_' . md5((string)$bearerToken) . '.json');
+
+/** Fetch (or reuse cached) OAuth 2.0 access token. Falls back to the raw token if OAuth fails. */
+function getAccessToken($clientId, $token, $forceRefresh = false) {
+    if (empty($clientId)) return $token; // direct token, accepted until 2027-12-31
+    if (!$forceRefresh && is_readable(MWL_TOKEN_CACHE)) {
+        $c = json_decode(@file_get_contents(MWL_TOKEN_CACHE), true);
+        if (!empty($c['access_token']) && ($c['expires_at'] ?? 0) > time() + 60) return $c['access_token'];
     }
-    
+    $ch = curl_init(MWL_BASE . '/oauth/token');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query(['grant_type' => 'client_credentials']),
+        CURLOPT_USERPWD => $clientId . ':' . $token,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $data = json_decode((string)$resp, true);
+    if ($code === 200 && !empty($data['access_token'])) {
+        @file_put_contents(MWL_TOKEN_CACHE, json_encode([
+            'access_token' => $data['access_token'],
+            'expires_at' => time() + (int)($data['expires_in'] ?? 3600),
+        ]), LOCK_EX);
+        return $data['access_token'];
+    }
+    return $token;
+}
+
+/** GET a v5 resource. No trailing slash (v5 returns 404 for that). */
+function callMyWebLogAPIv5($endpoint, $token, $clientId, $queryParams = [], $retry = true) {
+    $url = MWL_BASE . '/' . trim($endpoint, '/');
+    if (!empty($queryParams)) $url .= '?' . http_build_query($queryParams);
+
     $ch = curl_init($url);
-    
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPGET => true,
         CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $bearerToken,
+            'Accept: application/json',
+            'Authorization: Bearer ' . getAccessToken($clientId, $token, !$retry),
         ],
         CURLOPT_TIMEOUT => 15,
     ]);
-    
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
     curl_close($ch);
-    
-    if ($error) {
-        return ['error' => 'cURL error: ' . $error];
+
+    if ($error) return ['error' => 'cURL error: ' . $error];
+    if ($httpCode === 401 && $retry && !empty($clientId)) {
+        return callMyWebLogAPIv5($endpoint, $token, $clientId, $queryParams, false);
     }
-    
+    $data = json_decode((string)$response, true);
     if ($httpCode !== 200) {
-        return ['error' => 'HTTP ' . $httpCode, 'raw_response' => substr($response, 0, 500)];
+        $msg = $data['detail'] ?? $data['title'] ?? ('HTTP ' . $httpCode);
+        return ['error' => $msg, 'raw_response' => substr((string)$response, 0, 500)];
     }
-    
-    $data = json_decode($response, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
-        return [
-            'error' => 'Invalid JSON response',
-            'raw_response' => substr($response, 0, 1000),
-            'json_error' => json_last_error_msg()
-        ];
+        return ['error' => 'Invalid JSON response', 'raw_response' => substr((string)$response, 0, 1000), 'json_error' => json_last_error_msg()];
     }
-    
-    // Check for v4 error format
-    if (isset($data['errors']) && is_array($data['errors'])) {
-        $errorMsg = $data['errors'][0]['message'] ?? 'Unknown API error';
-        return ['error' => $errorMsg];
-    }
-    
     return $data;
+}
+
+/** Fetch every page of a v5 list endpoint. */
+function fetchAllV5($endpoint, $token, $clientId, $params) {
+    $all = [];
+    $limit = 100;
+    for ($offset = 0, $page = 0; $page < 20; $page++, $offset += $limit) {
+        $res = callMyWebLogAPIv5($endpoint, $token, $clientId, $params + ['limit' => $limit, 'offset' => $offset]);
+        if (isset($res['error'])) return $page === 0 ? $res : ['data' => $all];
+        $items = $res['data'] ?? [];
+        $all = array_merge($all, $items);
+        if (count($items) < $limit || empty($res['links']['next'])) break;
+    }
+    return ['data' => $all];
 }
 
 // Get today's date
@@ -87,13 +116,13 @@ $dateFrom = $today;
 $dateTo   = $today;
 
 // Fetch today's bookings (incl. overlapping multi-day bookings)
-$bookingsData = callMyWebLogAPIv4('bookings', $bearerToken, [
+$bookingsData = fetchAllV5('bookings', $bearerToken, $clientId, [
     'date_from' => $dateFrom,
     'date_to' => $dateTo,
 ]);
 
 // Fetch object status for maintenance info
-$objectStatusData = callMyWebLogAPIv4('objects/status', $bearerToken, []);
+$objectStatusData = fetchAllV5('objects', $bearerToken, $clientId, ['category_id' => 0, 'include' => 'status']);
 
 // Check for errors
 if (isset($bookingsData['error'])) {
@@ -108,42 +137,25 @@ if (isset($bookingsData['error'])) {
     exit;
 }
 
-// Build maintenance status map from objectStatus
+// Build maintenance status map from v5 objects (status ids: 0 OK, 1 yellow, 2 red)
 $maintenanceObjects = [];
-if (isset($objectStatusData['objects']) && is_array($objectStatusData['objects'])) {
-    foreach ($objectStatusData['objects'] as $obj) {
-        // status 2 = red/maintenance, status 1 = yellow/limited
-        if (isset($obj['status']) && ($obj['status'] == 2 || $obj['status'] == 1)) {
-            $reg = $obj['registration'] ?? '';
-            if ($reg) {
-                $maintenanceObjects[$reg] = $obj['status'] == 2 ? 'maintenance' : 'reserved';
-            }
-        }
-    }
-}
-// Fallback: try legacy structure if 'objects' key doesn't exist
-if (empty($maintenanceObjects) && isset($objectStatusData['status']) && $objectStatusData['status'] === 'ok' && isset($objectStatusData['response'])) {
-    foreach ($objectStatusData['response'] as $obj) {
-        if (isset($obj['status']) && ($obj['status'] == 2 || $obj['status'] == 1)) {
-            $reg = $obj['registration'] ?? '';
-            if ($reg) {
-                $maintenanceObjects[$reg] = $obj['status'] == 2 ? 'maintenance' : 'reserved';
-            }
-        }
+foreach (($objectStatusData['data'] ?? []) as $obj) {
+    $reg = $obj['registration'] ?? '';
+    $st = $obj['status']['total_id'] ?? null;
+    if ($reg && ($st === 2 || $st === 1)) {
+        $maintenanceObjects[$reg] = $st === 2 ? 'maintenance' : 'reserved';
     }
 }
 
-// Process bookings - v4 returns bookings directly in 'bookings' array
+// Process bookings
 $bookings = [];
 $now = new DateTime('now', new DateTimeZone('Europe/Stockholm'));
 $currentMinutes = (int)$now->format('H') * 60 + (int)$now->format('i');
 
-// Get all bookings from v4 response
-$allBookings = $bookingsData['bookings'] ?? [];
+$allBookings = $bookingsData['data'] ?? [];
 
 foreach ($allBookings as $booking) {
-    // v4 API uses nested structure
-    $aircraft = $booking['object']['registration'] ?? '';
+        $aircraft = $booking['object']['registration'] ?? '';
     
     // Filter: Only include aircraft (Swedish registration format SE-XXX)
     if (!preg_match('/^SE-[A-Z]{3}$/', $aircraft)) {
@@ -151,13 +163,13 @@ foreach ($allBookings as $booking) {
     }
     
     // Prioritera elevens namn om det finns, annars visa läraren/bokaren
-    if (!empty($booking['users']['student']['name'])) {
-        $pilot = $booking['users']['student']['name'];
+    if (!empty($booking['student']['name'])) {
+        $pilot = $booking['student']['name'];
     } else {
-        $pilot = $booking['users']['booking_owner']['name'] ?? '';
+        $pilot = $booking['user']['name'] ?? '';
     }
-    $startTime = $booking['times']['start_local'] ?? '';
-    $endTime = $booking['times']['end_local'] ?? '';
+    $startTime = $booking['start_local'] ?? '';
+    $endTime = $booking['end_local'] ?? '';
     
     // Filter: Only include bookings that cover today's date
     if ($startTime && $endTime) {

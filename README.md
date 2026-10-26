@@ -3,9 +3,17 @@ Ett projekt byggt med Lovable. Detta är den kompilerade versionen som inte krä
 
 <img width="949" height="542" alt="image" src="https://github.com/user-attachments/assets/cc012b4e-278a-4cef-b325-0e16ef10a698" />
 
+## Version 2.2 nyheter ##
+- Uppdatering för myWebLog API version 5. Se myWebLogs dokumentation. Avkommentera V4 om du använder denna
+- Korrigerat soltiderna så att de följer sommar/vintertid
+- Möjlighet att visa variabel vindinfallsvinkel mot banan. Aktiveras med WIND_VARIATION_ENABLED i config.
+- Om NOTAM-panelen används och det är fler NOTAM än vad som ryms i textrutan delas de upp i flera fönster som alternerar
+- I övrigt buggfixar och lite kodstädning.
+  
 ## Version 2.1 nyheter ##
 - Möjlighet att ange antal uppdateringar av METAR/TAF. Då CheckWX inför begränsat antal anrop per dygn till max 200 kan man nu ange hur ofta data hämtas. Standardvärdena är TAF var 60 minut och METAR var 15 minut
 - Konfigurerbart att hämta väder från en flygplats och NOTAM från en annan. Lämpligt för mindre flygplatser utan "eget väder"
+- Om man enbart vill visa bokningar men inte METAR/TAF kan man inaktivera väderpanelen i config.php
 - Allmänt småfix
 
 ## Version 2 nyheter ##
@@ -26,7 +34,7 @@ Informationspanelen är en webbsida med möjlighet till konfiguration. Den går 
 
 ## Installation
 - Ladda upp i ditt webbhotells public_html-mapp. Filerna måste ligga i roten (.../public_html/index.html respektive /api /assets). De flesta webhotell gör det enkelt att skapa en underdomän där man kan lägga filerna (exempelvis *infodisplay.flygklubb.nu*)
-- Lägg till API-nycklar för myweblog (api v4), checkwx och autorouter (valbart) i config.php
+- Lägg till API-nycklar för myweblog (api v4 eller V5), checkwx och autorouter (valbart) i config.php
 - Ange ICAO för närmaste flygplats samt koordinater (ex. 55.92) i config.php
 - Konfigurera övriga parametrar enligt önskemål i config.php
 
